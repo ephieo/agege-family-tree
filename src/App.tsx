@@ -1,7 +1,22 @@
-import { useState, useMemo, useRef, useEffect, useCallback } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
+
+// ─── Types ───────────────────────────────────────────────────────────────────
+interface TreeNodeData {
+  id: string;
+  name: string;
+  late?: boolean;
+  children?: TreeNodeData[];
+}
+
+interface FlatNode extends TreeNodeData {
+  _bi: number;
+  _parent: TreeNodeData | null;
+  _depth: number;
+  _color: string;
+}
 
 // ─── Data ────────────────────────────────────────────────────────────────────
-const BRANCHES = [
+const BRANCHES: TreeNodeData[] = [
   {
     id: "b1",
     name: "Ipapo Enoh Okagbare",
@@ -947,10 +962,10 @@ const COLORS = [
 ];
 
 // ─── Flatten for search ──────────────────────────────────────────────────────
-function flattenAll(nodes, bi = null, parent = null, depth = 0) {
-  const r = [];
-  nodes.forEach((n, i) => {
-    const myBi = depth === 0 ? i : bi;
+function flattenAll(nodes: TreeNodeData[], bi: number | null = null, parent: TreeNodeData | null = null, depth = 0): FlatNode[] {
+  const r: FlatNode[] = [];
+  nodes.forEach((n: TreeNodeData, i: number) => {
+    const myBi = depth === 0 ? i : bi!;
     r.push({
       ...n,
       _bi: myBi,
@@ -963,44 +978,42 @@ function flattenAll(nodes, bi = null, parent = null, depth = 0) {
   return r;
 }
 const ALL_NODES = flattenAll(BRANCHES);
-function getNode(id) {
+function getNode(id: string) {
   return ALL_NODES.find((n) => n.id === id);
 }
-function getChildren(id) {
+function getChildren(id: string) {
   return ALL_NODES.filter((n) => n._parent && n._parent.id === id);
 }
-function getSiblings(node) {
+function getSiblings(node: FlatNode) {
   return node._parent
     ? ALL_NODES.filter(
         (n) =>
-          n._parent && n._parent.id === node._parent.id && n.id !== node.id,
+          n._parent && n._parent.id === node._parent!.id && n.id !== node.id,
       )
     : BRANCHES.filter((b) => b.id !== node.id).map((b) => ({
         ...b,
         _depth: 0,
         _bi: BRANCHES.findIndex((x) => x.id === b.id),
+        _parent: null,
         _color:
           COLORS[BRANCHES.findIndex((x) => x.id === b.id) % COLORS.length],
       }));
 }
 
-function initials(name) {
+function initials(name: string) {
   const p = name.trim().split(/\s+/);
   return p.length >= 2
     ? (p[0][0] + p[1][0]).toUpperCase()
     : p[0].slice(0, 2).toUpperCase();
 }
-function countDesc(n) {
-  return (n.children || []).reduce((a, c) => a + 1 + countDesc(c), 0);
-}
 
 // ─── HTML Div Tree ───────────────────────────────────────────────────────────
-function TreeNode({ node, color, onSelect, highlightId, depth = 0 }) {
+function TreeNode({ node, color, onSelect, highlightId, depth = 0 }: { node: TreeNodeData; color: string; onSelect: (id: string) => void; highlightId: string | null; depth?: number }) {
   const hasKids = node.children && node.children.length > 0;
   const isHL = node.id === highlightId;
   const isRoot = depth === 0;
   const init = initials(node.name);
-  const visibleKids = hasKids ? node.children : [];
+  const visibleKids = hasKids ? node.children! : [];
 
   return (
     <div
@@ -1119,7 +1132,7 @@ function TreeNode({ node, color, onSelect, highlightId, depth = 0 }) {
                 }}
               />
             )}
-            {visibleKids.map((child, i) => (
+            {visibleKids.map((child) => (
               <div
                 key={child.id}
                 style={{
@@ -1143,7 +1156,7 @@ function TreeNode({ node, color, onSelect, highlightId, depth = 0 }) {
             ))}
             {/* Horizontal crossbar overlay */}
             {visibleKids.length > 1 && (
-              <HBar color={color} count={visibleKids.length} />
+              <HBar color={color} />
             )}
           </div>
         </div>
@@ -1153,14 +1166,10 @@ function TreeNode({ node, color, onSelect, highlightId, depth = 0 }) {
 }
 
 // Draws the horizontal crossbar across siblings using a ref to measure width
-function HBar({ color, count }) {
-  const ref = useRef(null);
-  const [w, setW] = useState(0);
+function HBar({ color }: { color: string }) {
+  const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (ref.current) {
-      const p = ref.current.parentElement;
-      if (p) setW(p.offsetWidth);
-    }
+    // ref used for measurement if needed
   });
   return (
     <div
@@ -1178,7 +1187,7 @@ function HBar({ color, count }) {
   );
 }
 
-function MiniTree({ branch, color, onSelect, highlightId }) {
+function MiniTree({ branch, color, onSelect, highlightId }: { branch: TreeNodeData; color: string; onSelect: (id: string) => void; highlightId: string | null }) {
   return (
     <div
       style={{
@@ -1203,7 +1212,7 @@ function MiniTree({ branch, color, onSelect, highlightId }) {
 }
 
 // ─── Avatar ──────────────────────────────────────────────────────────────────
-function Avatar({ name, color, size = 48, active }) {
+function Avatar({ name, color, size = 48, active }: { name: string; color: string; size?: number; active?: boolean }) {
   return (
     <div
       style={{
@@ -1229,7 +1238,7 @@ function Avatar({ name, color, size = 48, active }) {
   );
 }
 
-function PersonCard({ node, onClick, active, size = "md" }) {
+function PersonCard({ node, onClick, active, size = "md" }: { node: FlatNode; onClick: (id: string) => void; active?: boolean; size?: string }) {
   const sz = size === "lg" ? 64 : size === "sm" ? 36 : 48;
   const kids = getChildren(node.id);
   return (
@@ -1282,7 +1291,7 @@ function PersonCard({ node, onClick, active, size = "md" }) {
   );
 }
 
-function Section({ title, color, children }) {
+function Section({ title, color, children }: { title: string; color: string; children: React.ReactNode }) {
   return (
     <div
       style={{
@@ -1314,7 +1323,7 @@ function Section({ title, color, children }) {
 
 // ─── Main ────────────────────────────────────────────────────────────────────
 export default function App() {
-  const [selectedId, setSelectedId] = useState(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
 
@@ -1329,7 +1338,7 @@ export default function App() {
     );
   }, [search]);
 
-  function selectNode(id) {
+  function selectNode(id: string) {
     setSelectedId(id);
     setSearch("");
     setSearchOpen(false);
@@ -1341,19 +1350,22 @@ export default function App() {
   const selColor = selected?._color || "#7c3aed";
 
   // Walk up to find the depth-1 ancestor (grandparent level) to use as diagram root
-  function getDepth1Ancestor(node) {
+  function getDepth1Ancestor(node: FlatNode | null): FlatNode | null {
     if (!node) return null;
     if (node._depth === 0) return node; // branch root itself
-    let cur = node;
+    let cur: FlatNode = node;
     while (cur._depth > 1) {
-      cur = getNode(cur._parent?.id);
-      if (!cur) return null;
+      const parentId = cur._parent?.id;
+      if (!parentId) return null;
+      const parent = getNode(parentId);
+      if (!parent) return null;
+      cur = parent;
     }
     return cur;
   }
   const diagramRoot = selected ? getDepth1Ancestor(selected) : null;
   const diagramBranch = diagramRoot;
-  const diagramBi = selected ? selected._bi : null;
+  const diagramBi = selected ? selected._bi : 0;
 
   return (
     <div
@@ -1379,9 +1391,6 @@ export default function App() {
         <span
           onClick={() => {
             setSelectedId(null);
-            setBranchId("");
-            setChildId("");
-            setGrandId("");
           }}
           style={{
             color: "#fff",
@@ -1393,8 +1402,8 @@ export default function App() {
             paddingBottom: 1,
             transition: "color 0.15s",
           }}
-          onMouseEnter={(e) => (e.target.style.color = "#a5b4fc")}
-          onMouseLeave={(e) => (e.target.style.color = "#fff")}
+          onMouseEnter={(e) => ((e.target as HTMLElement).style.color = "#a5b4fc")}
+          onMouseLeave={(e) => ((e.target as HTMLElement).style.color = "#fff")}
         >
           Agege Family Tree
         </span>
